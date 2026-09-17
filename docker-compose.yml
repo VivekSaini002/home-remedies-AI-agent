@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------
+  # 1. MariaDB Vector Database
+  # ----------------------------------------------------
+  mariadb:
+    image: mariadb:11.4
+    container_name: remedybot-mariadb
+    restart: always
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: spring-ai
+    ports:
+      - "3308:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------
+  # 2. Spring Boot RAG Backend Service
+  # ----------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: remedybot-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/spring-ai
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  # ----------------------------------------------------
+  # 3. Next.js Tailwind CSS Frontend
+  # ----------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
+    container_name: remedybot-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
+    depends_on:
+      - backend
+
+volumes:
+  mariadb_data:

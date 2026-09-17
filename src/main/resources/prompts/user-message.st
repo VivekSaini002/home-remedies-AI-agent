@@ -1,0 +1,2 @@
+Health Query / Symptom:
+{query}

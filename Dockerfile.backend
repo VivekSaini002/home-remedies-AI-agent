@@ -1,0 +1,37 @@
+# ==========================================
+# STAGE 1: Build Spring Boot Application JAR
+# ==========================================
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /app
+
+# Copy Maven wrapper & pom.xml first for dependency caching
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
+
+RUN chmod +x mvnw
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code and build production JAR
+COPY src src
+RUN ./mvnw clean package -DskipTests
+
+# ==========================================
+# STAGE 2: Lightweight Runtime Environment
+# ==========================================
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy compiled JAR from builder stage
+COPY --from=builder /app/target/*.jar app.jar
+
+USER appuser
+
+# Expose default port (Render will bind via PORT env variable)
+ENV PORT=8080
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
